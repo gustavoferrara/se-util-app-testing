@@ -204,8 +204,8 @@ const setDateVisited = async (page, dateValue) => {
         input.value = targetDate;
         
         // Lock the field
-        input.setAttribute('readonly', 'true');
-        input.setAttribute('disabled', 'true');
+        input.setAttribute('readonly', 'false');
+        input.setAttribute('disabled', 'false');
         
         // Trigger events
         input.dispatchEvent(new Event('input', { bubbles: true }));
@@ -264,64 +264,93 @@ const setDateWorkPerformed = async (page, dateValue) => {
     console.log('Waiting for page to stabilize...');
     await setTimeout(1000);
 
-    console.log('Looking for Date Work Performed label...');
-    const labelExists = await page.evaluate(() => {
-      const elements = Array.from(document.querySelectorAll('div'));
-      const dateLabel = elements.find(el => el.textContent === 'Date Work Performed');
-      console.log('Found label:', !!dateLabel);
-      return !!dateLabel;
-    });
-
-    if (!labelExists) {
-      console.error('Date Work Performed label not found');
-      return;
-    }
-
-    // Set value and lock the field
-    console.log('Setting date and locking field...');
+    // Strategy 1: Direct value with events
+    console.log('Trying direct value with events...');
     await page.evaluate((targetDate) => {
       const dateLabel = Array.from(document.querySelectorAll('div'))
         .find(el => el.textContent === 'Date Work Performed');
+      if (!dateLabel) return false;
+      
       let container = dateLabel.parentElement;
       while (container && !container.querySelector('input[type="date"]')) {
         container = container.parentElement;
       }
+      
       const input = container?.querySelector('input[type="date"]');
-      if (input) {
-        // Set the value
-        input.value = targetDate;
-        
-        // Lock the field
-        input.setAttribute('readonly', 'true');
-        input.setAttribute('disabled', 'true');
-        
-        // Trigger events
-        input.dispatchEvent(new Event('input', { bubbles: true }));
-        input.dispatchEvent(new Event('change', { bubbles: true }));
-        
-        // Override value setter
-        Object.defineProperty(input, 'value', {
-          get: function() { return targetDate; },
-          set: function() { return targetDate; },
-          configurable: true
-        });
-        
-        // Prevent any programmatic changes
-        input.addEventListener('change', (e) => {
-          if (e.target.value !== targetDate) {
-            e.target.value = targetDate;
-          }
-        }, true);
-      }
+      if (!input) return false;
+      
+      input.value = targetDate;
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      return true;
     }, dateValue);
+    await setTimeout(500);
+    await handleMultipleSaves(page, 2);
+    await setTimeout(1000);
 
-    await setTimeout(100);
-    
-    // Verify the value
+    // Strategy 2: React state update
+    console.log('Trying React state update...');
+    await page.evaluate((targetDate) => {
+      const dateLabel = Array.from(document.querySelectorAll('div'))
+        .find(el => el.textContent === 'Date Work Performed');
+      if (!dateLabel) return false;
+      
+      let container = dateLabel.parentElement;
+      while (container && !container.querySelector('input[type="date"]')) {
+        container = container.parentElement;
+      }
+      
+      const input = container?.querySelector('input[type="date"]');
+      if (!input) return false;
+      
+      input.value = targetDate;
+      input.defaultValue = targetDate;
+      
+      ['input', 'change', 'blur'].forEach(eventType => {
+        const event = new Event(eventType, { bubbles: true });
+        input.dispatchEvent(event);
+      });
+      
+      return true;
+    }, dateValue);
+    await setTimeout(500);
+    await handleMultipleSaves(page, 2);
+    await setTimeout(1000);
+
+    // Strategy 3: Multiple events chain
+    console.log('Trying multiple events chain...');
+    await page.evaluate((targetDate) => {
+      const dateLabel = Array.from(document.querySelectorAll('div'))
+        .find(el => el.textContent === 'Date Work Performed');
+      if (!dateLabel) return false;
+      
+      let container = dateLabel.parentElement;
+      while (container && !container.querySelector('input[type="date"]')) {
+        container = container.parentElement;
+      }
+      
+      const input = container?.querySelector('input[type="date"]');
+      if (!input) return false;
+      
+      input.focus();
+      input.value = targetDate;
+      input.dispatchEvent(new Event('focus', { bubbles: true }));
+      input.dispatchEvent(new Event('click', { bubbles: true }));
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new Event('change', { bubbles: true }));
+      input.dispatchEvent(new Event('blur', { bubbles: true }));
+      input.blur();
+      
+      return true;
+    }, dateValue);
+    await setTimeout(500);
+    await handleMultipleSaves(page, 2);
+
+    // Verify final value
     const finalValue = await page.evaluate(() => {
       const dateLabel = Array.from(document.querySelectorAll('div'))
         .find(el => el.textContent === 'Date Work Performed');
-      let container = dateLabel.parentElement;
+      let container = dateLabel?.parentElement;
       while (container && !container.querySelector('input[type="date"]')) {
         container = container.parentElement;
       }
@@ -340,9 +369,98 @@ const setDateWorkPerformed = async (page, dateValue) => {
     console.log('Continuing despite date input error...');
   }
   
-  await setTimeout(100);
   console.log('Completed setDateWorkPerformed function');
 };
+
+// const setDateWorkPerformed = async (page, dateValue) => {
+//   console.log(`Starting setDateWorkPerformed with date: ${dateValue}`);
+  
+//   try {
+//     // First, wait for page to be stable
+//     console.log('Waiting for page to stabilize...');
+//     await setTimeout(1000);
+
+//     console.log('Looking for Date Work Performed label...');
+//     const labelExists = await page.evaluate(() => {
+//       const elements = Array.from(document.querySelectorAll('div'));
+//       const dateLabel = elements.find(el => el.textContent === 'Date Work Performed');
+//       console.log('Found label:', !!dateLabel);
+//       return !!dateLabel;
+//     });
+
+//     if (!labelExists) {
+//       console.error('Date Work Performed label not found');
+//       return;
+//     }
+
+//     // Set value and lock the field
+//     console.log('Setting date and locking field...');
+//     await page.evaluate((targetDate) => {
+//       const dateLabel = Array.from(document.querySelectorAll('div'))
+//         .find(el => el.textContent === 'Date Work Performed');
+//       let container = dateLabel.parentElement;
+//       while (container && !container.querySelector('input[type="date"]')) {
+//         container = container.parentElement;
+//       }
+//       const input = container?.querySelector('input[type="date"]');
+//       if (input) {
+//         // Set the value
+//         input.value = targetDate;
+        
+//         // Lock the field
+//         input.setAttribute('readonly', 'false');
+//         input.setAttribute('disabled', 'false');
+        
+//         // Trigger events
+//         input.dispatchEvent(new Event('input', { bubbles: true }));
+//         input.dispatchEvent(new Event('change', { bubbles: true }));
+        
+//         // Override value setter
+//         Object.defineProperty(input, 'value', {
+//           get: function() { return targetDate; },
+//           set: function() { return targetDate; },
+//           configurable: true
+//         });
+        
+//         // Prevent any programmatic changes
+//         input.addEventListener('change', (e) => {
+//           if (e.target.value !== targetDate) {
+//             e.target.value = targetDate;
+//           }
+//         }, true);
+//       }
+//     }, dateValue);
+
+//     await setTimeout(100);
+    
+//     // Verify the value
+//     const finalValue = await page.evaluate(() => {
+//       const dateLabel = Array.from(document.querySelectorAll('div'))
+//         .find(el => el.textContent === 'Date Work Performed');
+//       let container = dateLabel.parentElement;
+//       while (container && !container.querySelector('input[type="date"]')) {
+//         container = container.parentElement;
+//       }
+//       const input = container?.querySelector('input[type="date"]');
+//       return input?.value || 'no value';
+//     });
+
+//     console.log(`Final value: ${finalValue}`);
+    
+//     if (finalValue !== dateValue) {
+//       console.log(`Warning: Value verification failed. Got ${finalValue}, expected ${dateValue}`);
+//     }
+
+//   } catch (error) {
+//     console.error('Error in setDateWorkPerformed:', error);
+//     console.log('Continuing despite date input error...');
+//   }
+  
+//   await setTimeout(100);
+//   console.log('Completed setDateWorkPerformed function');
+// };
+
+
 
 
 const switchToSandbox = async (page) => {
@@ -718,27 +836,25 @@ await page.evaluate(() => {
       return false;
     });
 
+    await setTimeout(100);
+
    
-await setDateWorkPerformed(page, todayDate);
+
+
+
+    
 
 
 
     await handleOutOfScopeVegetation(page);
-
-
-
-
-
-
-
-  
-
  
   
   console.log("Visit form fields filled");
   await handlePhotoUploads(page);
 
   await setTimeout(1000);
+
+  await setDateWorkPerformed(page, todayDate);
 
   await handleMultipleSaves(page, 5); 
 
@@ -781,7 +897,7 @@ await setDateWorkPerformed(page, todayDate);
     await clickVisitButton(page);
     await clickVisitMenuButton(page);
     await fillVisitForm(page);
-    debugger
+
   } catch (error) {
     console.error("An error occurred:", error);
 
